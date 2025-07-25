@@ -5,64 +5,47 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { useAuthStore } from "@/lib/stores/auth-store"
-import { useSubmissionsStore } from "@/lib/stores/submissions-store"
 import toast from "react-hot-toast"
 import { CheckCircle, Mail, User, Phone, MessageSquare, Send, Sparkles, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { useMutation } from "@tanstack/react-query" 
 import { ContactFormData, contactSchema } from "@/lib/schemas/contact-schemas"
+import { useAuthStore } from "@/lib/stores/auth-store"
+import { useSubmissionsStore } from "@/lib/stores/submissions-store"
 import { LoadingButton } from "@/components/ui/Loading-button"
 import { FormInput } from "@/components/ui/Form-input"
 import { Textarea } from "@/components/ui/textarea"
 import { ProtectedRoute } from "@/components/Protected-route"
 
+async function submitContactForm(data: ContactFormData) {
+  const response = await fetch("/apis/contact", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    throw new Error("Failed to submit form")
+  }
+
+  return response.json()
+}
+
 function ContactForm() {
   const { user } = useAuthStore()
   const { addSubmission, submissions } = useSubmissionsStore()
-  const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [submissionCount, setSubmissionCount] = useState(0)
 
-  // Update submission count when component mounts or submissions change
-  useEffect(() => {
-    setSubmissionCount(submissions.length)
-  }, [submissions])
-
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  } = useForm<ContactFormData>({
-    resolver: zodResolver(contactSchema),
-    defaultValues: {
-      email: user?.email || "",
-    },
-  })
-
-  const onSubmit = async (data: ContactFormData) => {
-    setIsSubmitting(true)
-
-    try {
-      //  API call
-      const response = await fetch("/apis/contact", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to submit form")
-      }
-
-      const result = await response.json()
-
-      addSubmission(data)
+  const mutation = useMutation({
+    mutationFn: submitContactForm,
+    onSuccess: (data, variables) => {
+      addSubmission(variables)
 
       setShowSuccess(true)
-      setSubmissionCount(submissions.length + 1) 
+      setSubmissionCount(submissions.length + 1)
 
-      toast.success("Message sent successfully! 🎉", {
+      toast.success("Message sent successfully! ", {
         duration: 4000,
         position: "top-center",
         style: {
@@ -83,7 +66,8 @@ function ContactForm() {
         subject: "",
         message: "",
       })
-    } catch (error) {
+    },
+    onError: (error) => {
       toast.error("Failed to send message. Please try again.", {
         duration: 4000,
         position: "top-center",
@@ -97,9 +81,27 @@ function ContactForm() {
           secondary: "#EF4444",
         },
       })
-    } finally {
-      setIsSubmitting(false)
-    }
+    },
+  })
+
+  useEffect(() => {
+    setSubmissionCount(submissions.length)
+  }, [submissions])
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    reset,
+  } = useForm<ContactFormData>({
+    resolver: zodResolver(contactSchema),
+    defaultValues: {
+      email: user?.email || "",
+    },
+  })
+
+  const onSubmit = (data: ContactFormData) => {
+    mutation.mutate(data)
   }
 
   const handleSendAnother = () => {
@@ -124,7 +126,7 @@ function ContactForm() {
                 {submissionCount > 0 && (
                   <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
                     <p className="text-sm text-blue-800">
-                       You have sent <strong>{submissionCount}</strong> message{submissionCount !== 1 ? "s" : ""}{" "}
+                      You have sent <strong>{submissionCount}</strong> message{submissionCount !== 1 ? "s" : ""}{" "}
                       total
                     </p>
                   </div>
@@ -260,10 +262,10 @@ function ContactForm() {
 
               <LoadingButton
                 type="submit"
-                loading={isSubmitting}
+                loading={mutation.isPending}
                 className="w-full h-12 text-base font-semibold"
               >
-                {isSubmitting ? (
+                {mutation.isPending ? (
                   "Sending Message..."
                 ) : (
                   <>

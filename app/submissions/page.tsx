@@ -67,7 +67,6 @@ function SubmissionsList() {
             </span>
           </div>
 
-          {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
             <Link href="/contact">
               <Button className="px-6 py-2">
